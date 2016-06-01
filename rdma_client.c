@@ -307,9 +307,71 @@ static int client_send_metadata_to_server()
  */ 
 static int client_remote_memory_ops() 
 {
-	rdma_error("This function is not yet implemented \n");
-	/* Implement this function */
-	return -ENOSYS;
+	struct ibv_send_wr *bad_wr = NULL;
+	int ret = -1;
+
+	/* Send RDMA write request
+	 * In RDMA write, the sge is used to tell the local CA what memory
+	 * we want to transfer to the remote CA.
+	 * The remote address is set below in rdma_write_wr.wr.rdma.remote_addr 
+	 */
+	struct ibv_sge rdma_write_sge;
+	rdma_write_sge.addr = (uint64_t)client_src_mr->addr;
+	rdma_write_sge.length = client_src_mr->length;
+	rdma_write_sge.lkey = client_src_mr->lkey;
+
+	/* Create work request to send to local CA. */
+	struct ibv_send_wr rdma_write_wr;
+	bzero(&rdma_write_wr, sizeof(rdma_write_wr));
+	rdma_write_wr.sg_list = &rdma_write_sge;
+	rdma_write_wr.num_sge = 1;
+	rdma_write_wr.opcode = IBV_WR_RDMA_WRITE;
+	rdma_write_wr.wr.rdma.remote_addr = server_metadata_attr.address;
+	rdma_write_wr.wr.rdma.rkey = server_metadata_attr.stag.local_stag;
+
+	ret = ibv_post_send(client_qp, &rdma_write_wr, &bad_wr);
+	if (ret) {
+		rdma_error("Failed to do rdma write, errno: %d\n", -errno);
+		return -errno;
+	}
+
+	/* Send RDMA read request 
+	 * Prepare dst buffer 
+	 */
+	client_dst_mr = rdma_buffer_register(pd, dst, strlen(src), 
+		IBV_ACCESS_LOCAL_WRITE);
+	if(!client_dst_mr){
+		rdma_error("Failed to register dst buffer, ret = %d \n", -errno);
+		return -errno;
+	}
+
+	/* Create sge
+	 * In RDMA read, the sge is used to tell the local CA where in local
+	 * memory we want put the data read from remote.
+	 * The remote address is set below in rdma_read_wr.wr.rdma.remote_addr.
+	 */
+	struct ibv_sge rdma_read_sge;
+	rdma_read_sge.addr = (uint64_t)client_dst_mr->addr;
+	rdma_read_sge.length = client_dst_mr->length;
+	rdma_read_sge.lkey = client_dst_mr->lkey;
+
+	/* Create work request */
+	struct ibv_send_wr rdma_read_wr;
+	bzero(&rdma_read_wr, sizeof(rdma_read_wr));
+	rdma_read_wr.sg_list = &rdma_read_sge;
+	rdma_read_wr.num_sge = 1;
+	rdma_read_wr.opcode = IBV_WR_RDMA_READ;
+	rdma_read_wr.wr.rdma.remote_addr = server_metadata_attr.address;
+	rdma_read_wr.wr.rdma.rkey = server_metadata_attr.stag.local_stag;
+
+	/* Send WR */
+	ret = ibv_post_send(client_qp, &rdma_read_wr, &bad_wr);
+	if (ret) {
+		rdma_error("Failed to do rdma read, errno: %d\n", -errno);
+		return -errno;
+	}
+
+	return 0;
 }
 
 /* This function disconnects the RDMA connection from the server and cleans up 
@@ -475,4 +537,3 @@ int main(int argc, char **argv) {
 	}
 	return ret;
 }
-
