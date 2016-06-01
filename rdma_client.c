@@ -31,7 +31,8 @@ static char *src = NULL, *dst = NULL;
 
 /* This is our testing function */
 static int check_src_dst() 
-{
+{	
+	printf("src: '%s'\ndst: '%s'\n", src, dst);
 	return memcmp((void*) src, (void*) dst, strlen(src));
 }
 
