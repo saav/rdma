@@ -327,7 +327,7 @@ static int send_server_metadata_to_client()
 	server_send_wr.send_flags = IBV_SEND_SIGNALED;
 	struct ibv_send_wr *bad_wr = NULL;
 
-	/* Send WR to client. */
+	/* Send work request to client. */
 	ret = ibv_post_send(client_qp, &server_send_wr, &bad_wr);
 	if (ret) {
 		rdma_error("Failed to send server metadata, errno: %d\n", -errno);

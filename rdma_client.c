@@ -330,6 +330,7 @@ static int client_remote_memory_ops()
 	rdma_write_wr.wr.rdma.remote_addr = server_metadata_attr.address;
 	rdma_write_wr.wr.rdma.rkey = server_metadata_attr.stag.local_stag;
 
+	/* Send WR */
 	ret = ibv_post_send(client_qp, &rdma_write_wr, &bad_wr);
 	if (ret) {
 		rdma_error("Failed to do rdma write, errno: %d\n", -errno);
